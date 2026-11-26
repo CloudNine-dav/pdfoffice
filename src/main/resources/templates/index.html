@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PDF Office</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 0 16px;
+        }
+        #drop-zone {
+            border: 2px dashed #888;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            color: #555;
+            transition: background-color 0.2s, border-color 0.2s;
+            cursor: pointer;
+        }
+        #drop-zone.dragover, #drop-zone:focus {
+            border-color: #2563eb;
+            background-color: #eff6ff;
+            color: #2563eb;
+            outline: none;
+        }
+        #file-list {
+            margin-top: 16px;
+            list-style: none;
+            padding: 0;
+        }
+        #file-list li {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            word-break: break-all;
+        }
+        #btn-enviar {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+        #btn-enviar:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+        #btn-enviar:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+<h1>PDF Officer</h1>
+
+<div id="drop-zone" tabindex="0" role="button" aria-label="Área para arrastar ou selecionar arquivos">
+    Arraste seus arquivos aqui (ou clique para selecionar)
+    <input type="file" id="file-input" multiple hidden>
+</div>
+
+<ul id="file-list"></ul>
+
+<button id="btn-enviar" onclick="enviarArquivos()">Enviar Arquivos</button>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileListElement = document.getElementById('file-list');
+    const btnEnviar = document.getElementById('btn-enviar');
+
+    let uploadedFiles = [];
+
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'));
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'));
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        handleFiles(e.dataTransfer.files);
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInput.click();
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+        fileInput.value = '';
+    });
+
+    function handleFiles(fileList) {
+        const newFiles = [...fileList];
+
+        newFiles.forEach((file) => {
+            const jaExiste = uploadedFiles.some(
+                (existente) => existente.name === file.name && existente.size === file.size
+            );
+            if (!jaExiste) {
+                uploadedFiles.push(file);
+            }
+        });
+
+        renderFileList();
+    }
+
+    function renderFileList() {
+        fileListElement.innerHTML = '';
+
+        uploadedFiles.forEach((file, index) => {
+            const li = document.createElement('li');
+            const sizeKB = (file.size / 1024).toFixed(1);
+
+            const infoSpan = document.createElement('span');
+            const strongName = document.createElement('strong');
+            strongName.textContent = file.name;
+
+            infoSpan.appendChild(strongName);
+            infoSpan.appendChild(document.createTextNode(` (${sizeKB} KB)`));
+
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'Remover';
+            removeBtn.addEventListener('click', () => removeFile(index));
+
+            li.appendChild(infoSpan);
+            li.appendChild(removeBtn);
+            fileListElement.appendChild(li);
+        });
+    }
+
+    function removeFile(index) {
+        uploadedFiles.splice(index, 1);
+        renderFileList();
+    }
+
+    function enviarArquivos() {
+        if (uploadedFiles.length === 0) {
+            alert("Selecione pelo menos um arquivo antes de enviar.");
+            return;
+        }
+
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = "Enviando...";
+
+        const formData = new FormData();
+        uploadedFiles.forEach((file) => {
+            formData.append('arquivos', file);
+        });
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Erro ao enviar os arquivos.");
+                }
+                return response.json();
+            })
+            .then(nomesRetornados => {
+                alert("Enviado com sucesso: " + nomesRetornados.join(", "));
+                uploadedFiles = [];
+                renderFileList();
+            })
+            .catch(error => {
+                console.error(error);
+                alert("Erro ao conectar com o servidor.");
+            })
+            .finally(() => {
+                btnEnviar.disabled = false;
+                btnEnviar.textContent = "Enviar Arquivos";
+            });
+    }
+</script>
+
+</body>
+</html>
